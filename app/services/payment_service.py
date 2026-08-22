@@ -400,4 +400,4 @@ class PaymentService:
     @staticmethod
     def _build_receipt_number() -> str:
         stamp = datetime.now(UTC).strftime("%Y%m%d")
-        return f"RCP-{stamp}-{uuid4().hex[:8].upper()}""
+        return f"RCP-{stamp}-{uuid4().hex[:8].upper()}"
