@@ -104,12 +104,12 @@ async def seed() -> None:
             if not await session.scalar(select(Country).where(Country.code == code)):
                 session.add(Country(code=code, name=name, is_active=True))
 
+        # ISO 4217 fiat codes only — `currencies.code` is VARCHAR(3). USDT lives in crypto/settlement tables.
         for code, name, symbol in [
             ("SAR", "Saudi Riyal", "﷼"),
             ("USD", "US Dollar", "$"),
             ("EUR", "Euro", "€"),
             ("AED", "UAE Dirham", "د.إ"),
-            ("USDT", "Tether", "USDT"),
         ]:
             if not await session.scalar(select(Currency).where(Currency.code == code)):
                 session.add(Currency(code=code, name=name, symbol=symbol, is_active=True))
