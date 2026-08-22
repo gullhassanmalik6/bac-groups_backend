@@ -74,9 +74,12 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def normalize_database_urls(self) -> "Settings":
-        async_url = _as_async_postgres(self.database_url)
+        async_source = self.database_url
         sync_source = self.database_url_sync or self.database_url
-        self.database_url = async_url
+        if self.app_env == "production":
+            async_source = _append_sslmode_if_needed(async_source)
+            sync_source = _append_sslmode_if_needed(sync_source)
+        self.database_url = _as_async_postgres(async_source)
         self.database_url_sync = _as_sync_postgres(sync_source)
         return self
 
@@ -97,6 +100,17 @@ def _strip_driver(url: str) -> str:
         if value.startswith(prefix):
             return "postgresql://" + value[len(prefix) :]
     return value
+
+
+def _append_sslmode_if_needed(url: str) -> str:
+    """Railway Postgres requires SSL; append sslmode when not using localhost."""
+    value = url.strip()
+    lowered = value.lower()
+    if "localhost" in lowered or "127.0.0.1" in lowered:
+        return value
+    if "sslmode=" in lowered:
+        return value
+    return f"{value}{'&' if '?' in value else '?'}sslmode=require"
 
 
 def _as_async_postgres(url: str) -> str:
