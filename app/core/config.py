@@ -74,11 +74,20 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def normalize_database_urls(self) -> "Settings":
-        async_source = self.database_url
-        sync_source = self.database_url_sync or self.database_url
+        async_source = _sanitize_database_source(self.database_url)
+
         if self.app_env == "production":
+            if "localhost" in async_source.lower() or "127.0.0.1" in async_source.lower():
+                raise ValueError(
+                    "DATABASE_URL must use Railway Postgres in production "
+                    "(set to ${{Postgres.DATABASE_URL}} only). Remove localhost URLs."
+                )
             async_source = _append_sslmode_if_needed(async_source)
-            sync_source = _append_sslmode_if_needed(sync_source)
+            # Alembic uses sync URL — always derive from DATABASE_URL in production.
+            sync_source = async_source
+        else:
+            sync_source = _sanitize_database_source(self.database_url_sync or async_source)
+
         self.database_url = _as_async_postgres(async_source)
         self.database_url_sync = _as_sync_postgres(sync_source)
         return self
@@ -99,6 +108,17 @@ def _strip_driver(url: str) -> str:
     for prefix in ("postgresql+asyncpg://", "postgresql+psycopg://", "postgresql+psycopg2://"):
         if value.startswith(prefix):
             return "postgresql://" + value[len(prefix) :]
+    return value
+
+
+def _sanitize_database_source(url: str) -> str:
+    """Strip accidental paste of a second URL after the Railway database name."""
+    value = url.strip()
+    for marker in ("postgresql+asyncpg://", "postgresql+psycopg://", "postgres://", "postgresql://"):
+        if marker in value and not value.startswith(marker):
+            head, _, _tail = value.partition(marker)
+            if head.startswith(("postgres://", "postgresql://")):
+                return head.rstrip("/")
     return value
 
 
