@@ -174,15 +174,15 @@ async def seed() -> None:
             await session.flush()
             profile = MerchantProfile(
                 owner_user_id=merchant_user.id,
-                company_name="Al Dour Al Aliah",
-                commercial_registration=None,
+                company_name="Bonyan Advanced Contracting Establishment",
+                commercial_registration="7026169222",
                 tax_number=None,
                 country="SA",
                 city="Madinah",
                 address="Saudi Arabia – Madinah 42393",
-                email="turki.hejaili@gmail.com",
+                email="info@bacgroupsa.com",
                 phone="+966599000789",
-                industry="Construction",
+                industry="Heavy machinery / Marine / Project advisory",
                 status=MerchantStatus.ACTIVE,
             )
             session.add(profile)
