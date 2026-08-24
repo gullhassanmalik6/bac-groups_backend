@@ -1,4 +1,10 @@
-from app.core.config import _as_async_postgres, _as_sync_postgres, parse_cors_origins
+from app.core.config import (
+    _as_async_postgres,
+    _as_sync_postgres,
+    _with_asyncpg_ssl,
+    _with_psycopg_ssl,
+    parse_cors_origins,
+)
 from app.payments.factory import get_payment_gateway
 
 
@@ -7,6 +13,18 @@ def test_railway_postgres_url_is_normalized():
     assert _as_async_postgres(raw).startswith("postgresql+asyncpg://")
     assert _as_sync_postgres(raw).startswith("postgresql+psycopg://")
     assert _as_async_postgres("postgres://user:pass@host:5432/db").startswith("postgresql+asyncpg://")
+
+
+def test_railway_ssl_params_are_driver_specific():
+    raw = "postgresql://user:pass@host:5432/db"
+    async_url = _as_async_postgres(_with_asyncpg_ssl(raw))
+    sync_url = _as_sync_postgres(_with_psycopg_ssl(raw))
+    assert "ssl=require" in async_url
+    assert "sslmode=" not in async_url
+    assert "sslmode=require" in sync_url
+    converted = _as_async_postgres(_with_asyncpg_ssl(raw + "?sslmode=require"))
+    assert "ssl=require" in converted
+    assert "sslmode=" not in converted
 
 
 def test_cors_origins_accepts_comma_separated_and_json():
