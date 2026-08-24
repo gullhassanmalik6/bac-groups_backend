@@ -1,8 +1,32 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def parse_cors_origins(value: object) -> list[str]:
+    """Accept JSON arrays, comma-separated hosts, or empty (Railway-friendly)."""
+    if value is None:
+        return ["http://localhost:5173"]
+    if isinstance(value, (list, tuple, set)):
+        return [str(item).strip() for item in value if str(item).strip()]
+    if isinstance(value, str):
+        cleaned = value.strip()
+        if not cleaned:
+            return ["http://localhost:5173"]
+        if cleaned.startswith("["):
+            import json
+
+            try:
+                parsed = json.loads(cleaned)
+            except json.JSONDecodeError:
+                return [cleaned]
+            if isinstance(parsed, list):
+                return [str(item).strip() for item in parsed if str(item).strip()]
+            return [str(parsed).strip()] if str(parsed).strip() else ["http://localhost:5173"]
+        return [item.strip() for item in cleaned.split(",") if item.strip()]
+    return ["http://localhost:5173"]
 
 
 class Settings(BaseSettings):
@@ -33,7 +57,8 @@ class Settings(BaseSettings):
     celery_broker_url: str = "redis://localhost:6379/1"
     celery_result_backend: str = "redis://localhost:6379/2"
 
-    cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173"])
+    # Stored as a plain string so Railway env values are not JSON-decoded by pydantic-settings.
+    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     rate_limit_per_minute: int = 120
 
     default_payment_gateway: str = "sandbox"
@@ -58,19 +83,7 @@ class Settings(BaseSettings):
     smtp_port: int = 587
     smtp_user: str = ""
     smtp_password: str = ""
-    email_from: str = "noreply@cryptopos.com"
-
-    @field_validator("cors_origins", mode="before")
-    @classmethod
-    def parse_cors(cls, value: object) -> object:
-        if isinstance(value, str):
-            cleaned = value.strip()
-            if cleaned.startswith("["):
-                import json
-
-                return json.loads(cleaned)
-            return [item.strip() for item in cleaned.split(",") if item.strip()]
-        return value
+    email_from: str = "info@bacgroupsa.com"
 
     @model_validator(mode="after")
     def normalize_database_urls(self) -> "Settings":
@@ -95,6 +108,10 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.app_env == "production"
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        return parse_cors_origins(self.cors_origins)
 
     @property
     def supported_currencies(self) -> set[str]:
