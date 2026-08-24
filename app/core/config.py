@@ -95,14 +95,14 @@ class Settings(BaseSettings):
                     "DATABASE_URL must use Railway Postgres in production "
                     "(set to ${{Postgres.DATABASE_URL}} only). Remove localhost URLs."
                 )
-            async_source = _append_sslmode_if_needed(async_source)
             # Alembic uses sync URL — always derive from DATABASE_URL in production.
             sync_source = async_source
         else:
             sync_source = _sanitize_database_source(self.database_url_sync or async_source)
 
-        self.database_url = _as_async_postgres(async_source)
-        self.database_url_sync = _as_sync_postgres(sync_source)
+        # asyncpg wants ssl=require; psycopg wants sslmode=require.
+        self.database_url = _as_async_postgres(_with_asyncpg_ssl(async_source))
+        self.database_url_sync = _as_sync_postgres(_with_psycopg_ssl(sync_source))
         return self
 
     @property
@@ -139,13 +139,40 @@ def _sanitize_database_source(url: str) -> str:
     return value
 
 
-def _append_sslmode_if_needed(url: str) -> str:
-    """Railway Postgres requires SSL; append sslmode when not using localhost."""
-    value = url.strip()
-    lowered = value.lower()
-    if "localhost" in lowered or "127.0.0.1" in lowered:
+def _is_local_db(url: str) -> bool:
+    lowered = url.lower()
+    return "localhost" in lowered or "127.0.0.1" in lowered
+
+
+def _strip_ssl_query_params(url: str) -> str:
+    """Remove ssl / sslmode query params so we can re-apply driver-specific ones."""
+    if "?" not in url:
+        return url
+    base, _, query = url.partition("?")
+    kept = [
+        part
+        for part in query.split("&")
+        if part and not part.lower().startswith("ssl=") and not part.lower().startswith("sslmode=")
+    ]
+    return f"{base}?{'&'.join(kept)}" if kept else base
+
+
+def _with_asyncpg_ssl(url: str) -> str:
+    """asyncpg rejects sslmode=; use ssl=require for Railway."""
+    value = _strip_ssl_query_params(url.strip())
+    if _is_local_db(value):
         return value
-    if "sslmode=" in lowered:
+    if "ssl=" in value.lower():
+        return value
+    return f"{value}{'&' if '?' in value else '?'}ssl=require"
+
+
+def _with_psycopg_ssl(url: str) -> str:
+    """psycopg uses sslmode=require for Railway Postgres."""
+    value = _strip_ssl_query_params(url.strip())
+    if _is_local_db(value):
+        return value
+    if "sslmode=" in value.lower():
         return value
     return f"{value}{'&' if '?' in value else '?'}sslmode=require"
 
