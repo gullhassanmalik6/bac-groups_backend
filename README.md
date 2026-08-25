@@ -84,7 +84,7 @@ pytest -q
 
 ## Railway (production)
 
-See `/docs/DEPLOYMENT.md`. Service root directory: `backend`. Healthcheck: `/api/v1/health`.
+See repository `README.md`. Railway connects to this GitHub repo root. Local workspace: `Client Project/Website/CryptoPOS/Backend/`. Healthcheck: `/api/v1/health`.
 
 Hobby plan. Postgres plugin. Domain/DNS stays on HostArmada.
 
