@@ -22,6 +22,65 @@ from app.models.website import (
     WebsiteService,
 )
 
+BONYAN_COMPANY = "Bonyan Advanced Contracting Establishment"
+BONYAN_CR = "7026169222"
+BONYAN_VAT = "3110625023"
+BONYAN_EMAIL = "info@bacgroupsa.com"
+BONYAN_WALLET_TRC20 = "TGQbDuBTUw75Uhh5qTuK1NFyQXyTTjDai7"
+MERCHANT_OWNER_EMAIL = "turki.hejaili@gmail.com"
+
+
+async def _sync_bonyan_merchant(session) -> None:
+    """Keep merchant VAT/wallet in sync when client sends updates (idempotent)."""
+    from app.core.enums import MerchantStatus, WalletStatus
+    from app.models.merchant import MerchantProfile, MerchantWallet
+
+    profile = await session.scalar(
+        select(MerchantProfile).where(MerchantProfile.company_name == BONYAN_COMPANY)
+    )
+    if profile is None:
+        owner = await session.scalar(select(User).where(User.email == MERCHANT_OWNER_EMAIL))
+        if owner:
+            profile = await session.scalar(
+                select(MerchantProfile).where(MerchantProfile.owner_user_id == owner.id)
+            )
+    if profile is None:
+        return
+
+    profile.company_name = BONYAN_COMPANY
+    profile.commercial_registration = BONYAN_CR
+    profile.tax_number = BONYAN_VAT
+    profile.email = BONYAN_EMAIL
+    profile.status = MerchantStatus.ACTIVE
+
+    primary = await session.scalar(
+        select(MerchantWallet).where(
+            MerchantWallet.merchant_id == profile.id,
+            MerchantWallet.is_primary.is_(True),
+        )
+    )
+    placeholder_addresses = {
+        "PENDING_CLIENT_TRC20_TRUST_WALLET",
+        "",
+    }
+    if primary is None:
+        session.add(
+            MerchantWallet(
+                merchant_id=profile.id,
+                wallet_address=BONYAN_WALLET_TRC20,
+                wallet_provider="trust_wallet",
+                wallet_network="trc20",
+                wallet_status=WalletStatus.ACTIVE,
+                is_primary=True,
+            )
+        )
+    elif primary.wallet_address in placeholder_addresses or primary.wallet_address != BONYAN_WALLET_TRC20:
+        primary.wallet_address = BONYAN_WALLET_TRC20
+        primary.wallet_provider = "trust_wallet"
+        primary.wallet_network = "trc20"
+        primary.wallet_status = WalletStatus.ACTIVE
+        primary.is_primary = True
+
 
 async def seed() -> None:
     async with AsyncSessionLocal() as session:
@@ -154,7 +213,7 @@ async def seed() -> None:
             )
 
         merchant_role = await session.scalar(select(Role).where(Role.name == UserRole.MERCHANT_OWNER))
-        merchant_user = await session.scalar(select(User).where(User.email == "turki.hejaili@gmail.com"))
+        merchant_user = await session.scalar(select(User).where(User.email == MERCHANT_OWNER_EMAIL))
         if merchant_role and not merchant_user:
             from app.core.enums import MerchantStatus, WalletStatus
             from app.models.merchant import MerchantProfile, MerchantWallet
@@ -162,7 +221,7 @@ async def seed() -> None:
             merchant_user = User(
                 first_name="Turki",
                 last_name="Hejaili",
-                email="turki.hejaili@gmail.com",
+                email=MERCHANT_OWNER_EMAIL,
                 phone="+966599000789",
                 password_hash=hash_password("ChangeMeOnFirstLogin!123"),
                 role_id=merchant_role.id,
@@ -174,13 +233,13 @@ async def seed() -> None:
             await session.flush()
             profile = MerchantProfile(
                 owner_user_id=merchant_user.id,
-                company_name="Bonyan Advanced Contracting Establishment",
-                commercial_registration="7026169222",
-                tax_number=None,
+                company_name=BONYAN_COMPANY,
+                commercial_registration=BONYAN_CR,
+                tax_number=BONYAN_VAT,
                 country="SA",
                 city="Madinah",
                 address="Saudi Arabia – Madinah 42393",
-                email="info@bacgroupsa.com",
+                email=BONYAN_EMAIL,
                 phone="+966599000789",
                 industry="Heavy machinery / Marine / Project advisory",
                 status=MerchantStatus.ACTIVE,
@@ -190,13 +249,15 @@ async def seed() -> None:
             session.add(
                 MerchantWallet(
                     merchant_id=profile.id,
-                    wallet_address="PENDING_CLIENT_TRC20_TRUST_WALLET",
+                    wallet_address=BONYAN_WALLET_TRC20,
                     wallet_provider="trust_wallet",
                     wallet_network="trc20",
-                    wallet_status=WalletStatus.INACTIVE,
+                    wallet_status=WalletStatus.ACTIVE,
                     is_primary=True,
                 )
             )
+
+        await _sync_bonyan_merchant(session)
 
         if not await session.scalar(select(WebsiteService).limit(1)):
             session.add_all(
