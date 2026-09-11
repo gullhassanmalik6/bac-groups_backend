@@ -32,12 +32,15 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
 def create_app() -> FastAPI:
     settings = get_settings()
+    docs_url = "/docs" if settings.docs_enabled else None
+    redoc_url = "/redoc" if settings.docs_enabled else None
+    openapi_url = "/openapi.json" if settings.docs_enabled else None
     application = FastAPI(
         title=settings.app_name,
         version=settings.app_version,
-        docs_url="/docs",
-        redoc_url="/redoc",
-        openapi_url="/openapi.json",
+        docs_url=docs_url,
+        redoc_url=redoc_url,
+        openapi_url=openapi_url,
         lifespan=lifespan,
     )
 
@@ -45,8 +48,8 @@ def create_app() -> FastAPI:
         CORSMiddleware,
         allow_origins=settings.cors_origin_list,
         allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type", "Accept", "X-Request-ID"],
     )
     application.add_middleware(SecurityHeadersMiddleware)
     application.add_middleware(RateLimitMiddleware)

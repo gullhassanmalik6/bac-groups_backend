@@ -1,12 +1,10 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, Query
 
 from app.api.v1.deps import CurrentUser, DbSession, require_roles
 from app.core.enums import UserRole
 from app.core.responses import success_response
 from app.models.user import User
-from app.repositories.merchant import MerchantRepository
-from app.repositories.transaction import SettlementRepository, TransactionRepository
-from fastapi import Depends
+from app.services.admin_dashboard_service import AdminDashboardService
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
@@ -15,17 +13,12 @@ router = APIRouter(prefix="/admin", tags=["Admin"])
 async def dashboard(
     session: DbSession,
     _: User = Depends(require_roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)),
+    days: int = Query(default=14, ge=1, le=90),
 ):
-    merchants = MerchantRepository(session)
-    transactions = TransactionRepository(session)
-    settlements = SettlementRepository(session)
-    return success_response(
-        data={
-            "merchants": await merchants.count(),
-            "transactions": await transactions.count(),
-            "settlements": await settlements.count(),
-        }
-    )
+    """Ops admin dashboard: KPIs, chart series, devices, processor status."""
+    service = AdminDashboardService(session)
+    data = await service.build(days=days)
+    return success_response(data=data.model_dump(mode="json"))
 
 
 @router.get("/me-check")

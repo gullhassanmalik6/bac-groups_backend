@@ -22,6 +22,10 @@ class PaymentResult:
     payment_method: str | None = None
     raw_response: dict[str, Any] = field(default_factory=dict)
     error_message: str | None = None
+    authorization_code: str | None = None
+    signature_required: bool = False
+    payment_method_token: str | None = None
+    card_last4: str | None = None
 
 
 @dataclass(slots=True)

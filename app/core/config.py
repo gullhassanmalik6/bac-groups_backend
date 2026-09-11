@@ -60,11 +60,19 @@ class Settings(BaseSettings):
     # Stored as a plain string so Railway env values are not JSON-decoded by pydantic-settings.
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     rate_limit_per_minute: int = 120
+    auth_rate_limit_per_minute: int = 20
+    enable_api_docs: bool | None = None  # None → auto (off in production)
 
     default_payment_gateway: str = "sandbox"
+    # Card-present terminal processor (distinct from legacy PaymentGateway).
+    default_payment_processor: str = "mock_sandbox"
+    # Informational label: sandbox | production. Production + mock is rejected by factory.
+    payment_environment: str = "sandbox"
+    # Alias of default_payment_processor for older .env (PAYMENT_PROVIDER).
+    payment_provider: str = ""
     default_exchange_provider: str = "sandbox"
     default_wallet_network: str = "trc20"
-    allowed_currencies: str = "SAR,USD,EUR"
+    allowed_currencies: str = "AED,CAD,EUR,GBP,SAR,USD"
 
     nowpayments_api_key: str = ""
     nowpayments_ipn_secret: str = ""
@@ -110,12 +118,29 @@ class Settings(BaseSettings):
         return self.app_env == "production"
 
     @property
+    def docs_enabled(self) -> bool:
+        if self.enable_api_docs is not None:
+            return self.enable_api_docs
+        return not self.is_production
+
+    @property
     def cors_origin_list(self) -> list[str]:
         return parse_cors_origins(self.cors_origins)
 
     @property
     def supported_currencies(self) -> set[str]:
         return {item.strip().upper() for item in self.allowed_currencies.split(",") if item.strip()}
+
+    @model_validator(mode="after")
+    def resolve_payment_processor_alias(self) -> "Settings":
+        # PAYMENT_PROVIDER historically meant gateway or processor; prefer explicit processor.
+        if self.payment_provider and self.default_payment_processor == "mock_sandbox":
+            alias = self.payment_provider.strip().lower()
+            if alias in {"mock", "mock_sandbox", "sandbox", "certified", "certified_psp", "acquirer"}:
+                self.default_payment_processor = (
+                    "mock_sandbox" if alias in {"mock", "sandbox"} else alias
+                )
+        return self
 
 
 def _strip_driver(url: str) -> str:

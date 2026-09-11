@@ -34,7 +34,8 @@ async def validation_exception_handler(_: Request, exc: RequestValidationError) 
 
 
 async def integrity_exception_handler(_: Request, exc: IntegrityError) -> ORJSONResponse:
-    logger.warning("database_integrity_error", error=str(exc.orig))
+    # Never echo DB dialect details to clients; keep logs short in production.
+    logger.warning("database_integrity_error")
     return error_response(
         message="Database constraint violation",
         status_code=status.HTTP_409_CONFLICT,

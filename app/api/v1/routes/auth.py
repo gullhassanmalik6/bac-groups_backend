@@ -10,15 +10,25 @@ from app.schemas.auth import (
     RegisterRequest,
     UserOut,
 )
+from app.services.audit_service import AuditService
 from app.services.auth_service import AuthService
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
-async def register(payload: RegisterRequest, session: DbSession):
+async def register(payload: RegisterRequest, request: Request, session: DbSession):
     service = AuthService(session)
     user = await service.register(payload)
+    await AuditService(session).record(
+        action="user_registered",
+        resource_type="user",
+        resource_id=str(user.id),
+        actor_user_id=user.id,
+        ip_address=await get_client_ip(request),
+        user_agent=request.headers.get("User-Agent"),
+        details={"email": user.email, "role": user.role_code},
+    )
     return success_response(
         data=user.model_dump(mode="json"),
         message="User registered",
@@ -34,6 +44,15 @@ async def login(payload: LoginRequest, request: Request, session: DbSession):
         ip_address=await get_client_ip(request),
         user_agent=request.headers.get("User-Agent"),
     )
+    await AuditService(session).record(
+        action="user_login",
+        resource_type="user",
+        resource_id=str(user.id),
+        actor_user_id=user.id,
+        ip_address=await get_client_ip(request),
+        user_agent=request.headers.get("User-Agent"),
+        details={"email": user.email, "role": user.role_code, "result": "success"},
+    )
     body = AuthResponse(tokens=tokens, user=user)
     return success_response(data=body.model_dump(mode="json"), message="Login successful")
 
@@ -46,9 +65,16 @@ async def refresh(payload: RefreshRequest, session: DbSession):
 
 
 @router.post("/logout")
-async def logout(payload: LogoutRequest, session: DbSession):
+async def logout(payload: LogoutRequest, request: Request, session: DbSession):
     service = AuthService(session)
     await service.logout(payload.refresh_token)
+    await AuditService(session).record(
+        action="user_logout",
+        resource_type="user",
+        ip_address=await get_client_ip(request),
+        user_agent=request.headers.get("User-Agent"),
+        details={"result": "success"},
+    )
     return success_response(message="Logged out")
 
 

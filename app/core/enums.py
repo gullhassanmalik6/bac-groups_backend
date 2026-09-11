@@ -2,6 +2,8 @@ from enum import StrEnum
 
 
 class UserRole(StrEnum):
+    """Platform roles. Spec aliases: ADMIN→admin/super_admin, OPERATOR→merchant_*, SUPERVISOR→support."""
+
     SUPER_ADMIN = "super_admin"
     ADMIN = "admin"
     MERCHANT_OWNER = "merchant_owner"
