@@ -206,6 +206,14 @@ class TerminalSessionService:
         if not token.startswith("pm_"):
             raise AppException("payment_method_token required — never send raw PAN/CVV", status_code=422)
 
+        from app.core.config import get_settings
+        from app.protocols.execution import require_protocol_execution
+
+        require_protocol_execution(
+            record.protocol_code or record.protocol_id,
+            environment=get_settings().payment_environment,
+        )
+
         prev = record.state
         record.state = transition(prev, CARD_PRESENTED)
         _append_event(record, prev, record.state, "Card presented (tokenized)")

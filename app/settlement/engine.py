@@ -1,12 +1,15 @@
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from decimal import Decimal
 
 from app.core.config import get_settings
 from app.core.enums import SettlementStatus, TransactionStatus
 from app.core.logging import get_logger
 from app.crypto.factory import get_exchange_provider
+from app.fees.engine import calculate_fee
 from app.exceptions.base import NotFoundError, SettlementError
 from app.models.payment import CryptoSettlement, CryptoTransferLog
 from app.repositories.merchant import MerchantWalletRepository
@@ -34,11 +37,13 @@ class SettlementEngine:
         self.settings = get_settings()
 
     def _calculate_fees(self, amount: Decimal) -> tuple[Decimal, Decimal]:
-        fee = (amount * Decimal(str(self.settings.platform_fee_percent)) / Decimal("100")).quantize(
-            Decimal("0.01"), rounding=ROUND_HALF_UP
+        result = calculate_fee(
+            amount,
+            self.settings.settlement_currency,
+            Decimal(str(self.settings.platform_fee_percent)),
+            policy_version="platform-v1",
         )
-        net = (amount - fee).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-        return fee, net
+        return result.fee_amount, result.net_amount
 
     async def prepare_and_settle(self, transaction_id: UUID) -> CryptoSettlement:
         transaction = await self.transactions.get_detailed(transaction_id)
