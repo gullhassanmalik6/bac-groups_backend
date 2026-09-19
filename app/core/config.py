@@ -185,7 +185,7 @@ def _strip_ssl_query_params(url: str) -> str:
 def _with_asyncpg_ssl(url: str) -> str:
     """asyncpg rejects sslmode=; use ssl=require for Railway."""
     value = _strip_ssl_query_params(url.strip())
-    if _is_local_db(value):
+    if value.startswith("sqlite") or _is_local_db(value):
         return value
     if "ssl=" in value.lower():
         return value
@@ -195,7 +195,7 @@ def _with_asyncpg_ssl(url: str) -> str:
 def _with_psycopg_ssl(url: str) -> str:
     """psycopg uses sslmode=require for Railway Postgres."""
     value = _strip_ssl_query_params(url.strip())
-    if _is_local_db(value):
+    if value.startswith("sqlite") or _is_local_db(value):
         return value
     if "sslmode=" in value.lower():
         return value
@@ -203,11 +203,22 @@ def _with_psycopg_ssl(url: str) -> str:
 
 
 def _as_async_postgres(url: str) -> str:
-    return "postgresql+asyncpg://" + _strip_driver(url).removeprefix("postgresql://")
+    value = url.strip()
+    if value.startswith("sqlite"):
+        # Keep aiosqlite for local/dev; do not rewrite as Postgres.
+        if value.startswith("sqlite:///"):
+            return "sqlite+aiosqlite:///" + value.removeprefix("sqlite:///")
+        return value
+    return "postgresql+asyncpg://" + _strip_driver(value).removeprefix("postgresql://")
 
 
 def _as_sync_postgres(url: str) -> str:
-    return "postgresql+psycopg://" + _strip_driver(url).removeprefix("postgresql://")
+    value = url.strip()
+    if value.startswith("sqlite"):
+        if value.startswith("sqlite+aiosqlite:///"):
+            return "sqlite:///" + value.removeprefix("sqlite+aiosqlite:///")
+        return value
+    return "postgresql+psycopg://" + _strip_driver(value).removeprefix("postgresql://")
 
 
 @lru_cache

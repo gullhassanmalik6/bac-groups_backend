@@ -209,9 +209,10 @@ class TerminalSessionService:
         from app.core.config import get_settings
         from app.protocols.execution import require_protocol_execution
 
+        settings = get_settings()
         require_protocol_execution(
-            record.protocol_code or record.protocol_id,
-            environment=get_settings().payment_environment,
+            record.protocol_code,
+            environment=settings.payment_environment,
         )
 
         prev = record.state
